@@ -4,90 +4,114 @@
 # -----------------------------------------
 
 # Fungsi untuk membaca data restoran dari CSV
-def read_restaurants(filename):
+import csv
+
+def fuzzify_servis(servis):
+    result = {}
+    if servis <= 50:
+        result["rendah"] = 1
+    elif 50 < servis < 70:
+        result["rendah"] = (70 - servis) / 20
+    else:
+        result["rendah"] = 0
+
+    if 60 < servis < 75:
+        result["sedang"] = (servis - 60) / 15
+    elif 75 <= servis <= 90:
+        result["sedang"] = (90 - servis) / 15
+    else:
+        result["sedang"] = 0
+
+    if servis >= 100:
+        result["tinggi"] = 1
+    elif 80 < servis < 100:
+        result["tinggi"] = (servis - 80) / 20
+    else:
+        result["tinggi"] = 0
+
+    return result
+
+def fuzzify_harga(harga):
+    result = {}
+    if harga <= 10000:
+        result["murah"] = 1
+    elif 10000 < harga < 25000:
+        result["murah"] = (25000 - harga) / 15000
+    else:
+        result["murah"] = 0
+
+    if 15000 < harga < 30000:
+        result["sedang"] = (harga - 15000) / 15000
+    elif 30000 <= harga < 45000:
+        result["sedang"] = (45000 - harga) / 15000
+    else:
+        result["sedang"] = 0
+
+    if harga >= 50000:
+        result["mahal"] = 1
+    elif 20000 < harga < 50000:
+        result["mahal"] = (harga - 20000) / 30000
+    else:
+        result["mahal"] = 0
+
+    return result
+
+def inference(servis_fz, harga_fz):
+    rules = []
+    rules.append(("tinggi", min(servis_fz["tinggi"], harga_fz["murah"])))
+    rules.append(("sedang", min(servis_fz["sedang"], harga_fz["murah"])))
+    rules.append(("rendah", min(servis_fz["rendah"], harga_fz["mahal"])))
+    rules.append(("sedang", min(servis_fz["tinggi"], harga_fz["mahal"])))
+    rules.append(("rendah", min(servis_fz["rendah"], harga_fz["murah"])))
+    rules.append(("sedang", min(servis_fz["sedang"], harga_fz["sedang"])))
+
+    return rules
+
+def defuzzification(inferensi):
+    nilai = 0.0
+    bobot = 0.0
+    for label, val in inferensi:
+        if label == "tinggi":
+            nilai += val * 90
+        elif label == "sedang":
+            nilai += val * 70
+        elif label == "rendah":
+            nilai += val * 50
+        bobot += val
+    return nilai / bobot if bobot != 0 else 0
+
+def save_to_csv(data, filename="hasil_top5_restoran.csv"):
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["ID Pelanggan", "Pelayanan", "Harga", "Skor Fuzzy"])
+        for id, servis, harga, skor in data:
+            writer.writerow([id, servis, harga, round(skor, 2)])
+    print(f"Hasil telah disimpan ke '{filename}'")
+
+def main():
     data = []
-    with open(filename, 'r') as file:
-        lines = file.readlines()
-        for line in lines[1:]:  # skip header
-            parts = line.strip().split(',')
-            id_restoran = int(parts[0].replace('"','').strip())
-            kualitas_servis = int(parts[1].replace('"','').strip())
-            harga = float(parts[2].replace('"','').strip())
-            data.append((id_restoran, kualitas_servis, harga))
-    return data
+    with open("restoran.csv", newline='') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            id = int(row["id Pelanggan"])
+            servis = int(row["Pelayanan"])
+            harga = int(row["harga"])
 
-# Fungsi Membership (fungsi keanggotaan) untuk Kualitas Servis
-def kualitas_servis_membership(kualitas):
-    buruk = max(0, min(1, (50 - kualitas) / 50))
-    cukup = max(0, min((kualitas - 30) / 20, (70 - kualitas) / 20))
-    bagus = max(0, min(1, (kualitas - 50) / 50))
-    return {'buruk': buruk, 'cukup': cukup, 'bagus': bagus}
+            servis_fz = fuzzify_servis(servis)
+            harga_fz = fuzzify_harga(harga)
+            infer = inference(servis_fz, harga_fz)
+            skor = defuzzification(infer)
 
-# Fungsi Membership untuk Harga
-def harga_membership(harga):
-    murah = max(0, min(1, (40000 - harga) / 15000))
-    sedang = max(0, min((harga - 30000) / 10000, (50000 - harga) / 10000))
-    mahal = max(0, min(1, (harga - 45000) / 10000))
-    return {'murah': murah, 'sedang': sedang, 'mahal': mahal}
+            data.append((id, servis, harga, skor))
 
-# Fungsi Inferensi Aturan
-def inferensi(servis, harga):
-    aturan = []
-    # Contoh beberapa aturan:
-    aturan.append(('sangat layak', min(servis['bagus'], harga['murah'])))
-    aturan.append(('layak', min(servis['bagus'], harga['sedang'])))
-    aturan.append(('cukup layak', min(servis['cukup'], harga['murah'])))
-    aturan.append(('tidak layak', min(servis['buruk'], harga['mahal'])))
-    # dan seterusnya sesuai logika fuzzy kamu
-    return aturan
+    top5 = sorted(data, key=lambda x: x[3], reverse=True)[:5]
 
-# Fungsi Defuzzification (Centroid Method)
-def defuzzification(aturan):
-    skor = 0
-    total_bobot = 0
-    nilai = {
-        'sangat layak': 90,
-        'layak': 75,
-        'cukup layak': 60,
-        'tidak layak': 40,
-        'sangat tidak layak': 20
-    }
-    for kategori, nilai_keanggotaan in aturan:
-        skor += nilai[kategori] * nilai_keanggotaan
-        total_bobot += nilai_keanggotaan
-    if total_bobot == 0:
-        return 0
-    return skor / total_bobot
+    print("Top 5 Restoran Terbaik Berdasarkan Fuzzy:")
+    print("| ID  | Servis | Harga  | Skor |")
+    print("|-----|--------|--------|------|")
+    for id, servis, harga, skor in top5:
+        print(f"| {id:3} | {servis:6} | {harga:6} | {skor:.2f} |")
 
-# Fungsi Menyimpan hasil ke file
-def save_result(filename, data):
-    with open(filename, 'w') as file:
-        file.write("ID,Kualitas Servis,Harga,Skor\n")
-        for item in data:
-            file.write("{},{},{},{}\n".format(item[0], item[1], item[2], item[3]))
-
-# MAIN PROGRAM
-if __name__ == "__main__":
-    restoran = read_restaurants("restoran.csv")
-    hasil = []
-
-    for data in restoran:
-        id_restoran, kualitas, harga = data
-        servis_membership = kualitas_servis_membership(kualitas)
-        harga_membership_value = harga_membership(harga)
-        hasil_inferensi = inferensi(servis_membership, harga_membership_value)
-        skor = defuzzification(hasil_inferensi)
-        hasil.append((id_restoran, kualitas, harga, skor))
-
-    # Urutkan berdasarkan skor terbesar
-    hasil.sort(key=lambda x: x[3], reverse=True)
-
-    # Ambil 5 restoran terbaik
-    terbaik = hasil[:5]
-
-    # Simpan ke file
-    save_result("peringkat.csv", terbaik)
-
-    # Tampilkan
-    for item in terbaik:
-        print(f"ID: {item[0]}, Kualitas Servis: {item[1]}, Harga: {item[2]}, Skor: {item[3]:.2f}")
+    save_to_csv(top5);
+    
+main()
