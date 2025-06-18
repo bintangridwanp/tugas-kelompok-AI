@@ -74,6 +74,15 @@ def defuzzification(inferensi):
         bobot += val
     return nilai / bobot if bobot != 0 else 0
 
+
+# def save_to_csv(data, filename="hasil_top5_restoran.csv"):
+#     with open(filename, mode='w', newline='') as file:
+#         writer = csv.writer(file)
+#         writer.writerow(["ID Pelanggan", "Pelayanan", "Harga", "Skor Fuzzy"])
+#         for id, servis, harga, skor in data:
+#             writer.writerow([id, servis, harga, round(skor, 2)])
+#     print(f"Hasil telah disimpan ke '{filename}'")
+
 def main():
     data = []
     with open("restoran.csv", newline='') as csvfile:
@@ -100,4 +109,7 @@ def main():
     print("\nRekomendasi Restoran:")
     for id, servis, harga, skor in top5:
         print(f"ID: {id}, Servis: {servis}, Harga: {harga}, Skor: {skor:.2f}")
+
+    save_to_csv(top5)
+
 main()
